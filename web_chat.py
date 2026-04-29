@@ -35,15 +35,19 @@ app.add_middleware(
 
 # 模型配置
 AVAILABLE_MODELS = [
-    {"id": "qwen-plus", "name": "Qwen-Plus（平衡）", "provider": "阿里云"},
-    {"id": "qwen-max", "name": "Qwen-Max（最强）", "provider": "阿里云"},
-    {"id": "qwen-turbo", "name": "Qwen-Turbo（最快）", "provider": "阿里云"},
-    {"id": "qwen3.5-plus", "name": "Qwen3.5-Plus", "provider": "阿里云"},
+    # 阿里云 Qwen 系列
+    {"id": "qwen-plus", "name": "Qwen-Plus（平衡）", "provider": "阿里云", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"},
+    {"id": "qwen-max", "name": "Qwen-Max（最强）", "provider": "阿里云", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"},
+    {"id": "qwen-turbo", "name": "Qwen-Turbo（最快）", "provider": "阿里云", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"},
+    {"id": "qwen3.5-plus", "name": "Qwen3.5-Plus", "provider": "阿里云", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"},
+    # DeepSeek 系列
+    {"id": "deepseek-chat", "name": "DeepSeek V3", "provider": "DeepSeek", "base_url": "https://api.deepseek.com"},
+    {"id": "deepseek-reasoner", "name": "DeepSeek R1（推理）", "provider": "DeepSeek", "base_url": "https://api.deepseek.com"},
 ]
 
 DEFAULT_MODEL = "qwen3.5-plus"
 
-# 初始化客户端
+# 初始化客户端（默认用阿里云）
 api_key = os.getenv("DASHSCOPE_API_KEY") or os.getenv("OPENAI_API_KEY")
 base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1" if os.getenv("DASHSCOPE_API_KEY") else None
 
@@ -129,6 +133,14 @@ async def list_models():
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
+    """
+    聊天接口 - 支持多模型切换
+    
+    流程：
+    1. 根据 model 参数查找模型配置
+    2. 获取对应的 API Key 和 base_url
+    3. 创建临时客户端调用 API
+    """
     if req.session_id not in sessions:
         sessions[req.session_id] = [
             {"role": "system", "content": "你是一个有用的 AI 助手。"}
@@ -137,8 +149,33 @@ async def chat(req: ChatRequest):
     messages = sessions[req.session_id]
     messages.append({"role": "user", "content": req.message})
     
-    response = client.chat.completions.create(
-        model=req.model or DEFAULT_MODEL,
+    # ========== 第 1 步：查找模型配置 ==========
+    model_config = None
+    for m in AVAILABLE_MODELS:
+        if m["id"] == (req.model or DEFAULT_MODEL):
+            model_config = m
+            break
+    
+    if not model_config:
+        model_config = {"id": DEFAULT_MODEL, "base_url": base_url}
+    
+    # ========== 第 2 步：获取对应 API Key ==========
+    # 根据 provider 选择不同的环境变量
+    provider = model_config.get("provider", "阿里云")
+    if provider == "DeepSeek":
+        model_api_key = os.getenv("DEEPSEEK_API_KEY") or api_key
+        model_base_url = model_config.get("base_url", "https://api.deepseek.com")
+    else:
+        # 阿里云
+        model_api_key = api_key
+        model_base_url = model_config.get("base_url", base_url)
+    
+    # ========== 第 3 步：创建临时客户端 ==========
+    temp_client = OpenAI(api_key=model_api_key, base_url=model_base_url)
+    
+    # ========== 第 4 步：调用 LLM ==========
+    response = temp_client.chat.completions.create(
+        model=model_config["id"],
         messages=messages,
         tools=TOOL_DEFINITIONS,
         tool_choice="auto"
@@ -164,8 +201,8 @@ async def chat(req: ChatRequest):
                 })
         
         if tool_results:
-            response = client.chat.completions.create(
-                model=req.model or DEFAULT_MODEL,
+            response = temp_client.chat.completions.create(
+                model=model_config["id"],
                 messages=messages
             )
             message = response.choices[0].message
@@ -173,7 +210,7 @@ async def chat(req: ChatRequest):
     
     return ChatResponse(
         reply=message.content,
-        model=req.model or DEFAULT_MODEL,
+        model=model_config["id"],
         session_id=req.session_id,
         timestamp=datetime.now().isoformat()
     )
