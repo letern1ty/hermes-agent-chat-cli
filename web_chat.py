@@ -17,6 +17,7 @@ from openai import OpenAI
 import json
 from dotenv import load_dotenv
 from datetime import datetime
+import traceback
 
 # 加载环境变量
 load_dotenv()
@@ -46,7 +47,7 @@ AVAILABLE_MODELS = [
     {"id": "deepseek-v4-pro", "name": "DeepSeek V4 Pro（高级）", "provider": "DeepSeek", "base_url": "https://api.deepseek.com"},
 ]
 
-DEFAULT_MODEL = "qwen3.5-plus"
+DEFAULT_MODEL = "deepseek-chat"
 
 # 初始化客户端（默认用阿里云）
 api_key = os.getenv("DASHSCOPE_API_KEY") or os.getenv("OPENAI_API_KEY")
@@ -62,6 +63,7 @@ class ChatRequest(BaseModel):
     session_id: str
     message: str
     model: Optional[str] = DEFAULT_MODEL
+    mode: Optional[str] = "direct"  # "direct" 或 "agent"
 
 class ChatResponse(BaseModel):
     reply: str
@@ -80,7 +82,7 @@ TOOLS = {
         "北京": "25°C 晴", "上海": "28°C 多云", "深圳": "32°C 小雨",
         "广州": "30°C 阴", "杭州": "26°C 小雨", "纽约": "18°C 阴"
     }.get(city, f"{city}天气数据暂不可用"),
-    "calculator": lambda expr: str(eval(expr)) if all(c in "0123456789+-*/.() " for c in expr) else "错误：无效表达式",
+    "calculator": lambda expression: str(eval(expression)) if all(c in "0123456789+-*/.() " for c in expression) else "错误：无效表达式",
     "get_time": lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 }
 
@@ -134,47 +136,21 @@ async def list_models():
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
-    """
-    聊天接口 - 支持多模型切换
-    
-    流程：
-    1. 根据 model 参数查找模型配置
-    2. 获取对应的 API Key 和 base_url
-    3. 创建临时客户端调用 API
-    """
+    # Agent 模式：带思考步骤和工具调用
+    if req.mode == "agent":
+        return await agent_chat(req)
+
+    # 直接模式：原始的简单对话
     if req.session_id not in sessions:
-        sessions[req.session_id] = [
-            {"role": "system", "content": "你是一个有用的 AI 助手。"}
-        ]
+        sessions[req.session_id] = [{"role": "system", "content": "你是一个有用的 AI 助手。"}]
     
     messages = sessions[req.session_id]
     messages.append({"role": "user", "content": req.message})
     
-    # ========== 第 1 步：查找模型配置 ==========
-    model_config = None
-    for m in AVAILABLE_MODELS:
-        if m["id"] == (req.model or DEFAULT_MODEL):
-            model_config = m
-            break
-    
-    if not model_config:
-        model_config = {"id": DEFAULT_MODEL, "base_url": base_url}
-    
-    # ========== 第 2 步：获取对应 API Key ==========
-    # 根据 provider 选择不同的环境变量
-    provider = model_config.get("provider", "阿里云")
-    if provider == "DeepSeek":
-        model_api_key = os.getenv("DEEPSEEK_API_KEY") or api_key
-        model_base_url = model_config.get("base_url", "https://api.deepseek.com")
-    else:
-        # 阿里云
-        model_api_key = api_key
-        model_base_url = model_config.get("base_url", base_url)
-    
-    # ========== 第 3 步：创建临时客户端 ==========
+    model_config = _get_model_config(req.model)
+    model_api_key, model_base_url = _get_provider_config(model_config)
     temp_client = OpenAI(api_key=model_api_key, base_url=model_base_url)
     
-    # ========== 第 4 步：调用 LLM ==========
     response = temp_client.chat.completions.create(
         model=model_config["id"],
         messages=messages,
@@ -190,16 +166,10 @@ async def chat(req: ChatRequest):
         for tool_call in message.tool_calls:
             tool_name = tool_call.function.name
             tool_args = json.loads(tool_call.function.arguments)
-            
             if tool_name in TOOLS:
                 result = TOOLS[tool_name](**tool_args)
                 tool_results.append({"name": tool_name, "args": tool_args, "result": result})
-                
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": result
-                })
+                messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": result})
         
         if tool_results:
             response = temp_client.chat.completions.create(
@@ -215,6 +185,161 @@ async def chat(req: ChatRequest):
         session_id=req.session_id,
         timestamp=datetime.now().isoformat()
     )
+
+
+def _get_model_config(model_id):
+    for m in AVAILABLE_MODELS:
+        if m["id"] == (model_id or DEFAULT_MODEL):
+            return m
+    return {"id": DEFAULT_MODEL, "base_url": "https://api.deepseek.com", "provider": "DeepSeek"}
+
+
+def _get_provider_config(model_config):
+    provider = model_config.get("provider", "DeepSeek")
+    if provider == "DeepSeek":
+        key = os.getenv("DEEPSEEK_API_KEY") or api_key
+        url = model_config.get("base_url", "https://api.deepseek.com")
+    else:
+        key = api_key
+        url = model_config.get("base_url", base_url)
+    return key, url
+
+
+async def agent_chat(req: ChatRequest) -> ChatResponse:
+    """
+    Agent 模式聊天 - 带思考步骤展示 + 工具调用
+    回复格式：思考步骤 + 最终答案
+    """
+    model_config = _get_model_config(req.model)
+    model_api_key, model_base_url = _get_provider_config(model_config)
+    temp_client = OpenAI(api_key=model_api_key, base_url=model_base_url)
+    
+    # 管理 Agent 会话
+    if req.session_id not in sessions:
+        sessions[req.session_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    
+    messages = sessions[req.session_id]
+    messages.append({"role": "user", "content": req.message})
+    
+    # 构建回复：包含步骤和最终答案
+    step_messages = []
+    max_rounds = 5
+    
+    for _ in range(max_rounds):
+        response = temp_client.chat.completions.create(
+            model=model_config["id"],
+            messages=messages,
+            tools=AGENT_TOOL_DEFINITIONS,
+            tool_choice="auto"
+        )
+        
+        message = response.choices[0].message
+        messages.append(message)
+        
+        # 有工具调用
+        if message.tool_calls:
+            step_info = {"thought": message.content or "我来分析一下...", "tool_calls": []}
+            for tool_call in message.tool_calls:
+                tool_name = tool_call.function.name
+                tool_args = json.loads(tool_call.function.arguments)
+                tool_result = TOOLS[tool_name](**tool_args) if tool_name in TOOLS else "未知工具"
+                step_info["tool_calls"].append({
+                    "name": tool_name,
+                    "args": tool_args,
+                    "result": tool_result
+                })
+                messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": tool_result})
+            step_messages.append(step_info)
+        else:
+            # 最终回答
+            final_answer = message.content
+            
+            # 用带步骤的格式返回
+            steps_text = ""
+            if step_messages:
+                steps_text += "🤔 **思考过程**\n\n"
+                for i, step in enumerate(step_messages, 1):
+                    if step["thought"]:
+                        steps_text += f"{step['thought']}\n\n"
+                    for tc in step["tool_calls"]:
+                        icon = {"get_weather": "🌤️", "calculator": "🧮", "get_time": "⏰", "search_files": "🔍",
+                                "read_file": "📖", "write_file": "✏️", "run_command": "💻"}.get(tc["name"], "🔧")
+                        args_str = ", ".join(f"{k}={v}" for k, v in tc["args"].items())
+                        steps_text += f"{icon} **{tc['name']}**({args_str})\n"
+                        steps_text += f"   → {tc['result']}\n\n"
+                steps_text += "---\n\n"
+            
+            full_reply = steps_text + final_answer
+            
+            return ChatResponse(
+                reply=full_reply,
+                model=model_config["id"],
+                session_id=req.session_id,
+                timestamp=datetime.now().isoformat()
+            )
+    
+    return ChatResponse(
+        reply="抱歉，思考步数过多，请重试。",
+        model=model_config["id"],
+        session_id=req.session_id,
+        timestamp=datetime.now().isoformat()
+    )
+
+
+SYSTEM_PROMPT = """你是一个 AI Agent，会像人类一样一步步思考问题。
+
+【能力】你可以使用工具来处理问题，步骤如下：
+1. 理解用户需求
+2. 思考需要调用什么工具
+3. 调用工具获取结果
+4. 基于结果给出最终答案
+
+【工具】
+- get_weather(city): 查询城市天气
+- calculator(expression): 计算数学表达式
+- get_time(): 获取当前时间
+
+【回复格式】
+每次回复先说出你的思考，然后决定是否调用工具。最终给出完整答案。"""
+
+AGENT_TOOL_DEFINITIONS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_weather",
+            "description": "获取城市天气",
+            "parameters": {
+                "type": "object",
+                "properties": {"city": {"type": "string", "description": "城市名，如北京、上海"}},
+                "required": ["city"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "calculator",
+            "description": "计算数学表达式，支持 + - * /",
+            "parameters": {
+                "type": "object",
+                "properties": {"expression": {"type": "string", "description": "数学表达式，如 2+2"}},
+                "required": ["expression"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_time",
+            "description": "获取当前时间",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    }
+]
+
+
+# 老的 /chat 保持兼容
+# 下面的辅助函数被新版 /chat 替代
 
 @app.get("/history/{session_id}")
 async def get_history(session_id: str):
