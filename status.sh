@@ -7,7 +7,7 @@ echo "=============================="
 
 echo ""
 echo "📡 云隧道地址:"
-curl -s --max-time 3 https://homework-elections-cellular-among.trycloudflare.com/health 2>/dev/null || echo "   ❌ 不可达"
+curl -s --max-time 3 https://burton-consider-handbook-outdoors.trycloudflare.com/health 2>/dev/null || echo "   ❌ 不可达"
 echo ""
 
 echo "🤖 飞书机器人 (8655):"
@@ -23,5 +23,5 @@ ps aux | grep auto-sync | grep -v grep > /dev/null && echo "   ✅ 运行中" ||
 echo ""
 echo "=============================="
 echo " 回调地址："
-echo " https://homework-elections-cellular-among.trycloudflare.com/feishu/callback"
+echo " https://burton-consider-handbook-outdoors.trycloudflare.com/feishu/callback"
 echo "=============================="
