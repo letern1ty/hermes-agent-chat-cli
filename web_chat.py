@@ -33,29 +33,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ========== 模型配置 ==========\n
-# 阿里云 DashScope 支持的模型列表
+# 模型配置
 AVAILABLE_MODELS = [
     {"id": "qwen-plus", "name": "Qwen-Plus（平衡）", "provider": "阿里云"},
     {"id": "qwen-max", "name": "Qwen-Max（最强）", "provider": "阿里云"},
     {"id": "qwen-turbo", "name": "Qwen-Turbo（最快）", "provider": "阿里云"},
     {"id": "qwen3.5-plus", "name": "Qwen3.5-Plus", "provider": "阿里云"},
-    {"id": "llama3-70b-8192", "name": "Llama3 70B", "provider": "阿里云"},
-    {"id": "gemma2-9b-it", "name": "Gemma2 9B", "provider": "阿里云"},
 ]
 
-# 默认模型
 DEFAULT_MODEL = "qwen3.5-plus"
 
-# 初始化客户端（使用阿里云 Qwen API）
+# 初始化客户端
 api_key = os.getenv("DASHSCOPE_API_KEY") or os.getenv("OPENAI_API_KEY")
 base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1" if os.getenv("DASHSCOPE_API_KEY") else None
 
 client = OpenAI(api_key=api_key, base_url=base_url)
 
-# ========== 会话存储 ==========\nsessions = {}
+# 会话存储
+sessions = {}
 
-# ========== 数据模型 ==========\nclass ChatRequest(BaseModel):
+# 数据模型
+class ChatRequest(BaseModel):
     session_id: str
     message: str
     model: Optional[str] = DEFAULT_MODEL
@@ -71,7 +69,8 @@ class ModelInfo(BaseModel):
     name: str
     provider: str
 
-# ========== 工具定义（可选）==========\nTOOLS = {
+# 工具定义
+TOOLS = {
     "get_weather": lambda city: {
         "北京": "25°C 晴", "上海": "28°C 多云", "深圳": "32°C 小雨",
         "广州": "30°C 阴", "杭州": "26°C 小雨", "纽约": "18°C 阴"
@@ -115,33 +114,21 @@ TOOL_DEFINITIONS = [
     }
 ]
 
-# ========== API 端点 ==========\n@app.get("/")
+# API 端点
+@app.get("/")
 async def root():
-    """返回首页"""
     return FileResponse("web/chat.html")
 
 @app.get("/health")
 async def health_check():
-    """健康检查"""
     return {"status": "ok", "timestamp": datetime.now().isoformat()}
 
 @app.get("/models")
 async def list_models():
-    """获取可用模型列表"""
     return {"models": AVAILABLE_MODELS, "default": DEFAULT_MODEL}
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
-    """
-    聊天接口
-    
-    - session_id: 会话 ID（用于保持对话历史）
-    - message: 用户消息
-    - model: 使用的模型（可选，默认 qwen3.5-plus）
-    
-    返回 AI 回复
-    """
-    # 获取或创建会话
     if req.session_id not in sessions:
         sessions[req.session_id] = [
             {"role": "system", "content": "你是一个有用的 AI 助手。"}
@@ -150,7 +137,6 @@ async def chat(req: ChatRequest):
     messages = sessions[req.session_id]
     messages.append({"role": "user", "content": req.message})
     
-    # 调用 LLM
     response = client.chat.completions.create(
         model=req.model or DEFAULT_MODEL,
         messages=messages,
@@ -161,7 +147,6 @@ async def chat(req: ChatRequest):
     message = response.choices[0].message
     messages.append(message)
     
-    # 处理工具调用
     tool_results = []
     if message.tool_calls:
         for tool_call in message.tool_calls:
@@ -178,7 +163,6 @@ async def chat(req: ChatRequest):
                     "content": result
                 })
         
-        # 如果有工具调用，再次调用 LLM 获取最终回复
         if tool_results:
             response = client.chat.completions.create(
                 model=req.model or DEFAULT_MODEL,
@@ -196,32 +180,28 @@ async def chat(req: ChatRequest):
 
 @app.get("/history/{session_id}")
 async def get_history(session_id: str):
-    """获取会话历史"""
     if session_id not in sessions:
         raise HTTPException(status_code=404, detail="会话不存在")
     return {"session_id": session_id, "messages": sessions[session_id]}
 
 @app.delete("/history/{session_id}")
 async def clear_history(session_id: str):
-    """清空会话历史"""
     if session_id in sessions:
         sessions[session_id] = [{"role": "system", "content": "你是一个有用的 AI 助手。"}]
     return {"status": "ok", "session_id": session_id}
 
 @app.get("/sessions")
 async def list_sessions():
-    """列出所有活跃会话"""
     return {"sessions": list(sessions.keys()), "count": len(sessions)}
 
-# ========== 启动服务器 ==========\nif __name__ == "__main__":
+if __name__ == "__main__":
     import uvicorn
     print("=" * 50)
-    print("🚀  AI Agent Web Chat 服务器")
+    print("🚀 AI Agent Web Chat 服务器")
     print("=" * 50)
     print(f"📍 访问地址：http://localhost:8000")
     print(f"📍 API 文档：http://localhost:8000/docs")
     print(f"📍 默认模型：{DEFAULT_MODEL}")
-    print(f"📍 可用模型：{len(AVAILABLE_MODELS)} 个")
     print("按 Ctrl+C 停止服务器")
     print("=" * 50)
     uvicorn.run(app, host="0.0.0.0", port=8000)
