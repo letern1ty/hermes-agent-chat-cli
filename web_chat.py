@@ -41,8 +41,9 @@ AVAILABLE_MODELS = [
     {"id": "qwen-turbo", "name": "Qwen-Turbo（最快）", "provider": "阿里云", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"},
     {"id": "qwen3.5-plus", "name": "Qwen3.5-Plus", "provider": "阿里云", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1"},
     # DeepSeek 系列
-    {"id": "deepseek-chat", "name": "DeepSeek V3", "provider": "DeepSeek", "base_url": "https://api.deepseek.com"},
+    {"id": "deepseek-chat", "name": "DeepSeek V4 Flash", "provider": "DeepSeek", "base_url": "https://api.deepseek.com"},
     {"id": "deepseek-reasoner", "name": "DeepSeek R1（推理）", "provider": "DeepSeek", "base_url": "https://api.deepseek.com"},
+    {"id": "deepseek-v4-pro", "name": "DeepSeek V4 Pro（高级）", "provider": "DeepSeek", "base_url": "https://api.deepseek.com"},
 ]
 
 DEFAULT_MODEL = "qwen3.5-plus"

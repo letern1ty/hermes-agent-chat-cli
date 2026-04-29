@@ -530,12 +530,17 @@
                     <!-- 模型选择器 -->
                     <div class="model-selector">
                         <select id="model-select" title="选择模型">
-                            <option value="qwen3.5-plus">Qwen3.5-Plus</option>
-                            <option value="qwen-plus">Qwen-Plus</option>
-                            <option value="qwen-max">Qwen-Max</option>
-                            <option value="qwen-turbo">Qwen-Turbo</option>
-                            <option value="deepseek-chat">DeepSeek V3</option>
-                            <option value="deepseek-reasoner">DeepSeek R1（推理）</option>
+                            <optgroup label="阿里云">
+                                <option value="qwen3.5-plus">Qwen3.5-Plus</option>
+                                <option value="qwen-plus">Qwen-Plus</option>
+                                <option value="qwen-max">Qwen-Max</option>
+                                <option value="qwen-turbo">Qwen-Turbo</option>
+                            </optgroup>
+                            <optgroup label="DeepSeek">
+                                <option value="deepseek-chat">DeepSeek V4 Flash</option>
+                                <option value="deepseek-reasoner">DeepSeek R1（推理）</option>
+                                <option value="deepseek-v4-pro">DeepSeek V4 Pro（高级）</option>
+                            </optgroup>
                         </select>
                     </div>
                     <!-- API 状态指示器 -->
