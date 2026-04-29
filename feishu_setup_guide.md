@@ -31,7 +31,7 @@
 
    | 配置项 | 值 |
    |--------|-----|
-   | 回调地址 | `https://machinery-cove-skill-nashville.trycloudflare.com/feishu/callback` |
+   | 回调地址 | `https://burton-consider-handbook-outdoors.trycloudflare.com/feishu/callback` |
    | 消息卡片签名 | 留空 |
 
 3. 点 **"保存"**
@@ -95,7 +95,7 @@ bash run_feishu.sh
 curl http://localhost:8655/health
 
 # Cloudflare 隧道状态
-curl -s https://machinery-cove-skill-nashville.trycloudflare.com/health
+curl -s https://burton-consider-handbook-outdoors.trycloudflare.com/health
 ```
 
 ### 停止服务
