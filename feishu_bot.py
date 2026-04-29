@@ -29,6 +29,19 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# ========== 日志 ==========
+LOG_FILE = "/tmp/feishu_bot.log"
+
+def log(msg):
+    """同时打印到 stdout 和日志文件"""
+    line = f"[{time.strftime('%H:%M:%S')}] {msg}"
+    print(line, flush=True)
+    try:
+        with open(LOG_FILE, "a") as f:
+            f.write(line + "\n")
+    except Exception:
+        pass
+
 # ========== 飞书配置 ==========
 APP_ID = os.getenv("FEISHU_APP_ID", "")
 APP_SECRET = os.getenv("FEISHU_APP_SECRET", "")
