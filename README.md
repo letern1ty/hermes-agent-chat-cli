@@ -1,79 +1,79 @@
-# 🤖 我的第一个 AI Agent
+# 🤖 Hermes Agent Chat CLI
 
-恭喜你！项目已经搭建好了。下面是快速开始指南。
+> 我的第一个 AI Agent 项目 - 学习 AI Agent 开发的实战项目
+
+[![Python](https://img.shields.io/badge/Python-3.13-blue)](https://python.org)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+
+## 📚 项目背景
+
+这是一个用于学习 AI Agent 开发的实战项目，基于阿里云 DashScope API（通义千问）构建。
+
+**学习目标**：从零基础开始，理解并实现 AI Agent 的核心功能：
+- ✅ 工具调用（Function Calling）
+- ✅ 对话记忆（Conversation Memory）
+- ✅ ReAct 模式（推理 + 行动）
+- ✅ 规划模式（Plan-and-Execute）
+- ✅ 多 Agent 协作
+
+---
+
+## 🚀 快速开始
+
+### 1. 克隆项目
+
+```bash
+git clone https://github.com/letern1ty/hermes-agent-chat-cli.git
+cd hermes-agent-chat-cli
+```
+
+### 2. 配置 API Key
+
+编辑 `.env` 文件，添加你的阿里云 DashScope API Key：
+
+```bash
+DASHSCOPE_API_KEY=your_api_key_here
+```
+
+获取 API Key：https://dashscope.console.aliyun.com/apiKey
+
+### 3. 安装依赖
+
+```bash
+python -m venv venv
+source venv/bin/activate  # macOS/Linux
+pip install -r requirements.txt
+```
+
+### 4. 运行
+
+**命令行版**：
+```bash
+python agent.py
+```
+
+**Web 版**：
+```bash
+python server.py
+# 访问 http://localhost:8000
+```
 
 ---
 
 ## 📁 项目结构
 
 ```
-~/my-first-agent/
-├── agent.py          # 命令行版 Agent（直接运行）
-├── server.py         # Web 服务器（带界面）
-├── index.html        # Web 界面
-├── .env              # API Key 配置文件（需要编辑）
-└── README.md         # 本文件
+hermes-agent-chat-cli/
+├── agent.py              # 命令行版 Agent
+├── server.py             # Web 服务器
+├── index.html            # Web 界面
+├── web_chat.py           # 新版 Web 聊天（支持模型选择）
+├── step6_react.py        # ReAct 模式示例
+├── step6_planning.py     # 规划模式示例
+├── step6_multi_agent.py  # 多 Agent 协作示例
+├── .env                  # 环境变量（API Key）
+└── README.md             # 本文件
 ```
-
----
-
-## ⚙️ 第一步：配置 API Key
-
-### 选项 A：使用 OpenAI（推荐）
-
-1. 访问 https://platform.openai.com/api-keys
-2. 登录/注册账号
-3. 点击 "Create new secret key"
-4. 复制 API Key（以 `sk-` 开头）
-5. 编辑 `.env` 文件：
-
-```bash
-# 打开文件
-code ~/.env  # 或你喜欢的编辑器
-
-# 修改这一行：
-OPENAI_API_KEY=sk-你的真实 API Key
-```
-
-### 选项 B：使用智谱 AI（更便宜）
-
-1. 访问 https://open.bigmodel.cn/
-2. 注册账号并创建 API Key
-3. 编辑 `agent.py`，把 `OpenAI` 改成 `ZhipuAI`（需要额外安装 `zhipuai` 库）
-
----
-
-## 🚀 运行方式
-
-### 方式 1：命令行版（简单）
-
-```bash
-cd ~/my-first-agent
-source venv/bin/activate
-python agent.py
-```
-
-**测试模式**：
-```bash
-python agent.py --test
-```
-
-**可用命令**：
-- `quit` - 退出
-- `clear` - 清空对话历史
-- `save` - 保存对话到文件
-
-### 方式 2：Web 版（推荐）
-
-```bash
-cd ~/my-first-agent
-source venv/bin/activate
-python server.py
-```
-
-然后打开浏览器访问：**http://localhost:8000**
-
-API 文档：**http://localhost:8000/docs**
 
 ---
 
@@ -88,6 +88,17 @@ API 文档：**http://localhost:8000/docs**
 4. 我叫小明，记住我的名字
 5. 我记得我叫什么？
 ```
+
+---
+
+## 📅 学习计划
+
+| 周次 | 主题 | 内容 |
+|------|------|------|
+| 第 1 周 | 基础入门 | 环境搭建、工具调用、对话记忆 |
+| 第 2 周 | 高级概念 | ReAct、规划模式、多 Agent |
+| 第 3 周 | RAG 与知识库 | 向量数据库、文档检索 |
+| 第 4 周 | 实战项目 | 前端代码审查 Agent |
 
 ---
 
@@ -109,48 +120,25 @@ TOOLS = {
 }
 ```
 
-然后在 `TOOL_DEFINITIONS` 中添加工具定义（告诉 LLM 这个工具的用法）。
+---
+
+## 📝 学习资源
+
+- [阿里云 DashScope 文档](https://help.aliyun.com/zh/dashscope/)
+- [LangChain 文档](https://python.langchain.com/)
+- [Hermes Agent 源码](~/.hermes/hermes-agent/)
 
 ---
 
-## 📚 学习下一步
+## 🎯 下一步
 
-完成这个练习后，你可以：
-
-1. **阅读完整学习文档**：`~/agent-learning-guide.md`
-2. **理解核心原理**：看 `agent.py` 中的 `Agent.chat()` 方法
-3. **添加更多工具**：比如文件读写、网络搜索
-4. **学习 Hermes Agent**：你已经在用的框架，源码在 `~/.hermes/hermes-agent/`
+- [ ] 完成 Web 聊天界面（支持模型选择）
+- [ ] 接入飞书机器人
+- [ ] 实现 RAG 知识库
+- [ ] 构建前端代码审查 Agent
 
 ---
 
-## ❓ 常见问题
+## 📄 License
 
-### Q: 没有 API Key 能用吗？
-A: 不行，需要至少一个 LLM 提供商的 API Key。新用户通常有免费额度。
-
-### Q: 费用多少？
-A: GPT-4o 约 $0.01/1K tokens，学习阶段每天 $1-2 足够。
-
-### Q: 报错了怎么办？
-A: 
-1. 检查 `.env` 文件中 API Key 是否正确
-2. 确保虚拟环境已激活：`source venv/bin/activate`
-3. 运行 `python agent.py --test` 看详细错误
-
----
-
-## 🎉 开始吧！
-
-```bash
-cd ~/my-first-agent
-source venv/bin/activate
-
-# 先测试（需要 API Key）
-python agent.py --test
-
-# 或者启动 Web 服务器
-python server.py
-```
-
-祝你学习愉快！有问题随时问。
+MIT License
