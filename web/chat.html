@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🤖 AI Agent Chat</title>
+    
+    <!-- Markdown 渲染 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
+    <!-- 代码高亮 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/core.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/javascript.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/python.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/bash.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/languages/json.min.js"></script>
+    
+    <style>
+        /* ========== CSS 变量 ========== */
+        :root {
+            --primary-color: #667eea;
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --bg-color: #f5f7fa;
+            --chat-bg: #ffffff;
+            --user-msg-bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --agent-msg-bg: #f8f9fa;
+            --text-color: #333333;
+            --text-secondary: #666666;
+            --border-color: #e0e0e0;
+            --shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            --shadow-hover: 0 8px 30px rgba(0, 0, 0, 0.15);
+        }
+        
+        /* ========== 基础样式 ========== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: var(--bg-color);
+            min-height: 100vh;
+            color: var(--text-color);
+        }
+        
+        /* ========== 布局 ========== */
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        /* ========== 头部 ========== */
+        .header {
+            background: var(--primary-gradient);
+            color: white;
+            padding: 16px 24px;
+            box-shadow: var(--shadow);
+            z-index: 100;
+        }
+        
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .header-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        
+        /* 模型选择器 */
+        .model-selector {
+            position: relative;
+        }
+        
+        .model-selector select {
+            padding: 8px 36px 8px 12px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            font-size: 0.9rem;
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='white' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+        }
+        
+        .model-selector select option {
+            background: #764ba2;
+            color: white;
+        }
+        
+        .model-selector select:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        /* ========== 聊天区域 ========== */
+        .chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px;
+            scroll-behavior: smooth;
+        }
+        
+        .chat-messages {
+            max-width: 900px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        
+        /* 消息气泡 */
+        .message {
+            display: flex;
+            gap: 12px;
+            max-width: 85%;
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .message.user {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }
+        
+        .message.agent {
+            align-self: flex-start;
+        }
+        
+        /* 头像 */
+        .avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+        
+        .message.user .avatar {
+            background: var(--primary-gradient);
+        }
+        
+        .message.agent .avatar {
+            background: #e8eaf6;
+        }
+        
+        /* 消息内容 */
+        .message-content {
+            padding: 12px 16px;
+            border-radius: 16px;
+            line-height: 1.6;
+            word-wrap: break-word;
+        }
+        
+        .message.user .message-content {
+            background: var(--user-msg-bg);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+        
+        .message.agent .message-content {
+            background: var(--agent-msg-bg);
+            color: var(--text-color);
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+        
+        /* Markdown 样式 */
+        .message-content markdown {
+            display: block;
+        }
+        
+        .message-content markdown p {
+            margin-bottom: 8px;
+        }
+        
+        .message-content markdown p:last-child {
+            margin-bottom: 0;
+        }
+        
+        .message-content markdown pre {
+            background: #1e1e1e;
+            padding: 12px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 8px 0;
+        }
+        
+        .message-content markdown code {
+            font-family: "Monaco", "Consolas", "Courier New", monospace;
+            font-size: 0.9em;
+        }
+        
+        .message-content markdown :not(pre) > code {
+            background: rgba(0, 0, 0, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        
+        .message.user .message-content markdown :not(pre) > code {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .message-content markdown ul,
+        .message-content markdown ol {
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+        
+        .message-content markdown blockquote {
+            border-left: 3px solid var(--primary-color);
+            padding-left: 12px;
+            margin: 8px 0;
+            color: var(--text-secondary);
+        }
+        
+        .message-content markdown table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 8px 0;
+        }
+        
+        .message-content markdown th,
+        .message-content markdown td {
+            border: 1px solid var(--border-color);
+            padding: 8px 12px;
+            text-align: left;
+        }
+        
+        .message-content markdown th {
+            background: var(--agent-msg-bg);
+        }
+        
+        /* ========== 输入区域 ========== */
+        .input-container {
+            background: var(--chat-bg);
+            border-top: 1px solid var(--border-color);
+            padding: 16px 24px;
+            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
+        }
+        
+        .input-wrapper {
+            max-width: 900px;
+            margin: 0 auto;
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+        }
+        
+        .input-box {
+            flex: 1;
+            position: relative;
+        }
+        
+        .input-box textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid var(--border-color);
+            border-radius: 16px;
+            font-size: 1rem;
+            font-family: inherit;
+            resize: none;
+            min-height: 48px;
+            max-height: 200px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        
+        .input-box textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .send-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: none;
+            background: var(--primary-gradient);
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+            flex-shrink: 0;
+        }
+        
+        .send-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-hover);
+        }
+        
+        .send-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .send-btn svg {
+            width: 20px;
+            height: 20px;
+        }
+        
+        /* ========== 状态指示器 ========== */
+        .typing-indicator {
+            display: none;
+            padding: 12px 24px;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        
+        .typing-indicator.active {
+            display: block;
+        }
+        
+        .typing-indicator span {
+            animation: blink 1.4s infinite;
+        }
+        
+        .typing-indicator span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        
+        .typing-indicator span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+        
+        @keyframes blink {
+            0%, 60%, 100% { opacity: 0.3; }
+            30% { opacity: 1; }
+        }
+        
+        /* ========== 工具调用提示 ========== */
+        .tool-call {
+            background: #fff3e0;
+            border: 1px solid #ffe0b2;
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin: 8px 0;
+            font-size: 0.85rem;
+            color: #e65100;
+        }
+        
+        .tool-call strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+        
+        /* ========== 欢迎消息 ========== */
+        .welcome-message {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-secondary);
+        }
+        
+        .welcome-message h2 {
+            font-size: 1.5rem;
+            margin-bottom: 8px;
+            color: var(--text-color);
+        }
+        
+        .welcome-message p {
+            margin-bottom: 16px;
+        }
+        
+        .welcome-suggestions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        
+        .suggestion-chip {
+            padding: 8px 16px;
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .suggestion-chip:hover {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+            transform: translateY(-2px);
+        }
+        
+        /* ========== 移动端适配 ========== */
+        @media (max-width: 768px) {
+            .header {
+                padding: 12px 16px;
+            }
+            
+            .header h1 {
+                font-size: 1.2rem;
+            }
+            
+            .header-actions {
+                gap: 8px;
+            }
+            
+            .model-selector select {
+                padding: 6px 28px 6px 10px;
+                font-size: 0.85rem;
+            }
+            
+            .chat-container {
+                padding: 16px;
+            }
+            
+            .message {
+                max-width: 90%;
+            }
+            
+            .input-container {
+                padding: 12px 16px;
+            }
+            
+            .send-btn {
+                width: 44px;
+                height: 44px;
+            }
+            
+            .welcome-suggestions {
+                flex-direction: column;
+            }
+            
+            .suggestion-chip {
+                text-align: center;
+            }
+        }
+        
+        /* ========== 滚动条样式 ========== */
+        .chat-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .chat-container::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        .chat-container::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 3px;
+        }
+        
+        .chat-container::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- 头部 -->
+        <header class="header">
+            <div class="header-content">
+                <h1>🤖 AI Agent Chat</h1>
+                <div class="header-actions">
+                    <div class="model-selector">
+                        <select id="model-select" title="选择模型">
+                            <option value="qwen3.5-plus">Qwen3.5-Plus</option>
+                            <option value="qwen-plus">Qwen-Plus</option>
+                            <option value="qwen-max">Qwen-Max</option>
+                            <option value="qwen-turbo">Qwen-Turbo</option>
+                        </select>
+                    </div>
+                    <button class="send-btn" onclick="clearChat()" title="清空对话" style="width: 36px; height: 36px; font-size: 1.2rem;">🗑️</button>
+                </div>
+            </div>
+        </header>
+        
+        <!-- 聊天区域 -->
+        <div class="chat-container" id="chat-container">
+            <div class="chat-messages" id="chat-messages">
+                <!-- 欢迎消息 -->
+                <div class="welcome-message" id="welcome-message">
+                    <h2>👋 你好！我是你的 AI 助手</h2>
+                    <p>我可以帮你回答问题、写代码、做计算等</p>
+                    <div class="welcome-suggestions">
+                        <span class="suggestion-chip" onclick="useSuggestion('北京天气怎么样？')">🌤️ 北京天气怎么样？</span>
+                        <span class="suggestion-chip" onclick="useSuggestion('帮我算一下 123 * 456')">🔢 帮我算一下 123 * 456</span>
+                        <span class="suggestion-chip" onclick="useSuggestion('现在几点了？')">⏰ 现在几点了？</span>
+                        <span class="suggestion-chip" onclick="useSuggestion('用 Python 写一个快速排序')">💻 用 Python 写一个快速排序</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 输入区域 -->
+        <div class="typing-indicator" id="typing-indicator">
+            🤖 Agent 正在思考<span>.</span><span>.</span><span>.</span>
+        </div>
+        
+        <div class="input-container">
+            <div class="input-wrapper">
+                <div class="input-box">
+                    <textarea 
+                        id="user-input" 
+                        placeholder="输入消息... (Shift+Enter 换行)"
+                        rows="1"
+                        onkeydown="handleKeyDown(event)"
+                        oninput="autoResize(this)"
+                    ></textarea>
+                </div>
+                <button class="send-btn" id="send-btn" onclick="sendMessage()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // ========== 配置 ==========
+        const API_BASE_URL = 'http://localhost:8000';
+        
+        // 生成或获取会话 ID
+        const sessionId = localStorage.getItem('agent_session_id') || 'session_' + Date.now();
+        localStorage.setItem('agent_session_id', sessionId);
+        
+        // ========== 工具函数 ==========
+        
+        // 自动调整 textarea 高度
+        function autoResize(textarea) {
+            textarea.style.height = 'auto';
+            textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
+        }
+        
+        // 处理键盘事件
+        function handleKeyDown(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+        
+        // 使用建议
+        function useSuggestion(text) {
+            document.getElementById('user-input').value = text;
+            sendMessage();
+        }
+        
+        // 滚动到底部
+        function scrollToBottom() {
+            const container = document.getElementById('chat-container');
+            container.scrollTop = container.scrollHeight;
+        }
+        
+        // 渲染 Markdown
+        function renderMarkdown(text) {
+            const html = marked.parse(text);
+            // 代码高亮
+            setTimeout(() => {
+                document.querySelectorAll('pre code').forEach((block) => {
+                    hljs.highlightElement(block);
+                });
+            }, 0);
+            return html;
+        }
+        
+        // 添加消息到聊天
+        function addMessage(content, type) {
+            const messagesContainer = document.getElementById('chat-messages');
+            const welcomeMessage = document.getElementById('welcome-message');
+            
+            // 隐藏欢迎消息
+            if (welcomeMessage) {
+                welcomeMessage.style.display = 'none';
+            }
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            
+            const avatar = type === 'user' ? '👤' : '🤖';
+            
+            let innerHTML;
+            if (type === 'agent') {
+                innerHTML = `
+                    <div class="avatar">${avatar}</div>
+                    <div class="message-content">
+                        <markdown>${renderMarkdown(content)}</markdown>
+                    </div>
+                `;
+            } else {
+                innerHTML = `
+                    <div class="message-content">${escapeHtml(content)}</div>
+                    <div class="avatar">${avatar}</div>
+                `;
+            }
+            
+            messageDiv.innerHTML = innerHTML;
+            messagesContainer.appendChild(messageDiv);
+            scrollToBottom();
+        }
+        
+        // HTML 转义
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // 显示/隐藏 typing 指示器
+        function showTyping(show) {
+            const indicator = document.getElementById('typing-indicator');
+            if (show) {
+                indicator.classList.add('active');
+                scrollToBottom();
+            } else {
+                indicator.classList.remove('active');
+            }
+        }
+        
+        // 设置发送按钮状态
+        function setSendButton(enabled) {
+            const btn = document.getElementById('send-btn');
+            const input = document.getElementById('user-input');
+            btn.disabled = !enabled;
+            input.disabled = !enabled;
+            if (enabled) {
+                input.focus();
+            }
+        }
+        
+        // ========== 核心功能 ==========
+        
+        // 发送消息
+        async function sendMessage() {
+            const input = document.getElementById('user-input');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            // 添加用户消息
+            addMessage(message, 'user');
+            
+            // 清空输入框
+            input.value = '';
+            autoResize(input);
+            
+            // 禁用输入
+            setSendButton(false);
+            showTyping(true);
+            
+            // 获取选中的模型
+            const model = document.getElementById('model-select').value;
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        message: message,
+                        model: model
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`请求失败：${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // 显示 Agent 回复
+                showTyping(false);
+                addMessage(data.reply, 'agent');
+                
+            } catch (error) {
+                showTyping(false);
+                addMessage(`❌ 错误：${error.message}`, 'agent');
+                console.error('Chat error:', error);
+            } finally {
+                setSendButton(true);
+            }
+        }
+        
+        // 清空对话
+        async function clearChat() {
+            if (!confirm('确定要清空对话历史吗？')) return;
+            
+            try {
+                await fetch(`${API_BASE_URL}/history/${sessionId}`, {
+                    method: 'DELETE'
+                });
+                
+                // 清空界面
+                const messagesContainer = document.getElementById('chat-messages');
+                messagesContainer.innerHTML = `
+                    <div class="welcome-message" id="welcome-message">
+                        <h2>👋 你好！我是你的 AI 助手</h2>
+                        <p>我可以帮你回答问题、写代码、做计算等</p>
+                        <div class="welcome-suggestions">
+                            <span class="suggestion-chip" onclick="useSuggestion('北京天气怎么样？')">🌤️ 北京天气怎么样？</span>
+                            <span class="suggestion-chip" onclick="useSuggestion('帮我算一下 123 * 456')">🔢 帮我算一下 123 * 456</span>
+                            <span class="suggestion-chip" onclick="useSuggestion('现在几点了？')">⏰ 现在几点了？</span>
+                            <span class="suggestion-chip" onclick="useSuggestion('用 Python 写一个快速排序')">💻 用 Python 写一个快速排序</span>
+                        </div>
+                    </div>
+                `;
+                
+            } catch (error) {
+                alert('清空失败：' + error.message);
+            }
+        }
+        
+        // ========== 初始化 ==========
+        window.onload = () => {
+            document.getElementById('user-input').focus();
+            
+            // 加载模型列表（可选）
+            loadModels();
+        };
+        
+        // 加载可用模型
+        async function loadModels() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/models`);
+                const data = await response.json();
+                
+                const select = document.getElementById('model-select');
+                select.innerHTML = '';
+                
+                data.models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.id;
+                    option.textContent = model.name;
+                    if (model.id === data.default) {
+                        option.selected = true;
+                    }
+                    select.appendChild(option);
+                });
+                
+            } catch (error) {
+                console.log('无法加载模型列表，使用默认选项');
+            }
+        }
+    </script>
+</body>
+</html>

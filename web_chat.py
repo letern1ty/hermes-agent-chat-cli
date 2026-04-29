@@ -118,7 +118,7 @@ TOOL_DEFINITIONS = [
 # ========== API 端点 ==========\n@app.get("/")
 async def root():
     """返回首页"""
-    return FileResponse("web_chat.html")
+    return FileResponse("web/chat.html")
 
 @app.get("/health")
 async def health_check():
