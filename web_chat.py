@@ -47,7 +47,7 @@ AVAILABLE_MODELS = [
     {"id": "deepseek-v4-pro", "name": "DeepSeek V4 Pro（高级）", "provider": "DeepSeek", "base_url": "https://api.deepseek.com"},
 ]
 
-DEFAULT_MODEL = "deepseek-chat"
+DEFAULT_MODEL = "deepseek-v4-pro"
 
 # 初始化客户端（默认用阿里云）
 api_key = os.getenv("DASHSCOPE_API_KEY") or os.getenv("OPENAI_API_KEY")
