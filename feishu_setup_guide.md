@@ -20,8 +20,8 @@
 
 1. 左侧菜单 → **"凭证与基础信息"**
 2. 你会看到两个关键信息：
-   - **App ID**：`cli_a978bd548cb89cd5`
-   - **App Secret**：`cPOQNF5hA7NMurhMnbta1gbRRrEKqW5t`
+   - **App ID**：`XXX`
+   - **App Secret**：`XXX`
 3. 这两个值已经配置在 `feishu_config.sh` 中了
 
 ### 3. 配置事件回调
