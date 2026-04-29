@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🤖 我的 AI Agent</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 20px;
+        }
+        
+        header h1 {
+            font-size: 2em;
+            margin-bottom: 5px;
+        }
+        
+        header p {
+            opacity: 0.9;
+            font-size: 0.9em;
+        }
+        
+        .chat-box {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        
+        #chat {
+            height: 450px;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        
+        .message {
+            margin: 15px 0;
+            padding: 12px 16px;
+            border-radius: 12px;
+            max-width: 80%;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .message.user {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 4px;
+        }
+        
+        .message.agent {
+            background: white;
+            color: #333;
+            margin-right: auto;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .message.tool {
+            background: #fff3e0;
+            color: #e65100;
+            font-size: 0.85em;
+            padding: 8px 12px;
+            margin: 8px 0;
+            border-radius: 8px;
+            font-family: "Monaco", "Consolas", monospace;
+        }
+        
+        .message.system {
+            background: #e8eaf6;
+            color: #3f51b5;
+            font-size: 0.85em;
+            text-align: center;
+            max-width: 100%;
+        }
+        
+        .input-area {
+            display: flex;
+            padding: 15px;
+            background: white;
+            border-top: 1px solid #eee;
+        }
+        
+        #input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 1em;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        
+        #input:focus {
+            border-color: #667eea;
+        }
+        
+        #send-btn {
+            margin-left: 10px;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        #send-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        #send-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 15px;
+            background: #f8f9fa;
+            border-top: 1px solid #eee;
+        }
+        
+        .controls button {
+            padding: 6px 12px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 0.85em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .controls button:hover {
+            background: #f0f0f0;
+            border-color: #ccc;
+        }
+        
+        .typing-indicator {
+            display: none;
+            padding: 10px 15px;
+            color: #999;
+            font-size: 0.9em;
+        }
+        
+        .typing-indicator.active {
+            display: block;
+        }
+        
+        .typing-indicator span {
+            animation: blink 1.4s infinite;
+        }
+        
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+        
+        @keyframes blink {
+            0%, 60%, 100% { opacity: 0.3; }
+            30% { opacity: 1; }
+        }
+        
+        /* 滚动条样式 */
+        #chat::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        #chat::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        
+        #chat::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 3px;
+        }
+        
+        #chat::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 我的 AI Agent</h1>
+            <p>支持工具调用：天气查询 · 计算器 · 时间查询</p>
+        </header>
+        
+        <div class="chat-box">
+            <div id="chat">
+                <div class="message system">
+                    👋 你好！我是你的 AI 助手，可以帮你查天气、做计算、看时间。试试问我："北京天气怎么样？"
+                </div>
+            </div>
+            
+            <div class="typing-indicator" id="typing">
+                🤖 Agent 正在思考<span>.</span><span>.</span><span>.</span>
+            </div>
+            
+            <div class="input-area">
+                <input type="text" id="input" placeholder="输入消息..." onkeypress="if(event.key==='Enter')send()">
+                <button id="send-btn" onclick="send()">发送</button>
+            </div>
+            
+            <div class="controls">
+                <div>
+                    <button onclick="clearHistory()">🗑️ 清空对话</button>
+                    <button onclick="showHistory()">📋 查看历史</button>
+                </div>
+                <div>
+                    <span id="session-info" style="font-size:0.8em;color:#999;"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 生成或获取会话 ID
+        const sessionId = localStorage.getItem('agent_session_id') || 'session_' + Date.now();
+        localStorage.setItem('agent_session_id', sessionId);
+        document.getElementById('session-info').textContent = '会话：' + sessionId.slice(0, 20) + '...';
+        
+        // 发送消息
+        async function send() {
+            const input = document.getElementById('input');
+            const sendBtn = document.getElementById('send-btn');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            // 显示用户消息
+            addMessage(message, 'user');
+            input.value = '';
+            input.disabled = true;
+            sendBtn.disabled = true;
+            
+            // 显示 typing 指示器
+            document.getElementById('typing').classList.add('active');
+            scrollToBottom();
+            
+            try {
+                // 发送请求
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        message: message
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('请求失败：' + response.status);
+                }
+                
+                const data = await response.json();
+                
+                // 隐藏 typing 指示器
+                document.getElementById('typing').classList.remove('active');
+                
+                // 显示工具调用（如果有）
+                if (data.tool_calls && data.tool_calls.length > 0) {
+                    data.tool_calls.forEach(tc => {
+                        const argsStr = JSON.stringify(tc.args);
+                        addMessage(`🔧 调用工具：${tc.name}(${argsStr})`, 'tool');
+                    });
+                }
+                
+                // 显示 Agent 回复
+                addMessage(data.reply, 'agent');
+                
+            } catch (error) {
+                document.getElementById('typing').classList.remove('active');
+                addMessage('❌ 错误：' + error.message, 'system');
+            } finally {
+                input.disabled = false;
+                sendBtn.disabled = false;
+                input.focus();
+            }
+        }
+        
+        // 添加消息到聊天框
+        function addMessage(text, type) {
+            const chat = document.getElementById('chat');
+            const div = document.createElement('div');
+            div.className = `message ${type}`;
+            div.textContent = text;
+            chat.appendChild(div);
+            scrollToBottom();
+        }
+        
+        // 滚动到底部
+        function scrollToBottom() {
+            const chat = document.getElementById('chat');
+            chat.scrollTop = chat.scrollHeight;
+        }
+        
+        // 清空对话
+        async function clearHistory() {
+            if (!confirm('确定要清空对话历史吗？')) return;
+            
+            try {
+                await fetch(`/history/${sessionId}`, { method: 'DELETE' });
+                document.getElementById('chat').innerHTML = `
+                    <div class="message system">
+                        👋 对话已清空，有什么可以帮你的？
+                    </div>
+                `;
+            } catch (error) {
+                alert('清空失败：' + error.message);
+            }
+        }
+        
+        // 查看历史
+        async function showHistory() {
+            try {
+                const response = await fetch(`/history/${sessionId}`);
+                if (!response.ok) {
+                    addMessage('暂无历史记录', 'system');
+                    return;
+                }
+                const data = await response.json();
+                const count = data.messages ? data.messages.length - 1 : 0;
+                addMessage(`📋 当前对话共有 ${count} 条消息`, 'system');
+            } catch (error) {
+                addMessage('获取历史失败', 'system');
+            }
+        }
+        
+        // 页面加载完成
+        window.onload = () => {
+            document.getElementById('input').focus();
+        };
+    </script>
+</body>
+</html>
