@@ -255,7 +255,7 @@ class FeishuHandler(BaseHTTPRequestHandler):
                     reply = chat_with_agent(sender_id, clean_text)
                     log(f"💬 Agent 回复: {reply[:80]}...")
                     
-                    send_feishu_message(chat_id, reply)
+                    send_feishu_message(sender_id, reply)  # 用 sender_id (open_id) 回复单聊
             else:
                 log(f"⚠️  非文本消息，跳过: msg_type={msg_type}")
         else:
