@@ -39,6 +39,31 @@ import requests
 from openai import OpenAI
 from dotenv import load_dotenv
 
+# ====================================================================
+# 模块 1.5：个人信息 - 为什么单独放一个文件？
+# ====================================================================
+# 知识点：
+# - 把个人信息（姓名、职业、目标）放到独立的 user_profile.py
+# - user_profile.py 在 .gitignore 中排除，不会提交到 Git
+# - 公开仓库里只有 user_profile.example.py（模板，不含真实信息）
+# - 这样面试官看代码时不会看到你的隐私，但 AI 助理依然能个性化回答
+# - 如果你想改 AI 对你的称呼、职业信息，只需改 user_profile.py
+import importlib.util
+import os
+_profile_path = os.path.join(os.path.dirname(__file__), "user_profile.py")
+_spec = importlib.util.spec_from_file_location("user_profile", _profile_path)
+_profile = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_profile)
+USER_NAME = _profile.USER_NAME
+USER_AGE = _profile.USER_AGE
+USER_JOB = _profile.USER_JOB
+USER_GOAL = _profile.USER_GOAL
+USER_SKILLS = _profile.USER_SKILLS
+USER_LOCATION = _profile.USER_LOCATION
+ASSISTANT_NAME = _profile.ASSISTANT_NAME
+USER_NICKNAME = _profile.USER_NICKNAME
+USER_EXTRA_CONTEXT = _profile.USER_EXTRA_CONTEXT
+
 load_dotenv()  # 读取 .env 文件中的环境变量
 
 # ====================================================================
@@ -148,12 +173,12 @@ TOOLS = {
     ) else "错误：无效表达式（只支持数字和 +-*/ 运算）",
     "get_time": lambda: time.strftime("%Y-%m-%d %H:%M:%S"),
     "get_user_info": lambda: json.dumps({
-        "name": "李天宇", "age": 28,
-        "job": "小红书外包 · 前端工程师（AI平台）",
-        "goal": "3-4个月内转型AI应用工程师，期望薪资25-35K",
-        "learning": "正在学习AI Agent开发，项目驱动边做边学",
-        "skills": "Vue3/React/React Native + TypeScript，Python零基础",
-        "location": "北京，期望去上海",
+        "name": USER_NAME, "age": USER_AGE,
+        "job": USER_JOB,
+        "goal": USER_GOAL,
+        "learning": USER_EXTRA_CONTEXT,
+        "skills": USER_SKILLS,
+        "location": USER_LOCATION,
     }, ensure_ascii=False),
 }
 
@@ -215,33 +240,33 @@ TOOL_DEFINITIONS = [
 # - 把用户背景写进去，AI 就能提供更个性化的回答
 # - 列出所有工具的用途，但不要限制 AI 使用它们的方式
 
-SYSTEM_PROMPT = """你是 Hermes，李天宇（Tianyu）的专属 AI 私人助理，部署在飞书上。
+SYSTEM_PROMPT = f"""你是 {ASSISTANT_NAME}，{USER_NICKNAME}（{USER_NAME}）的专属 AI 私人助理，部署在飞书上。
 
 ## 你的身份
-- 你是 Tianyu 的私人 AI 伙伴，不是冷冰冰的机器人
+- 你是 {USER_NICKNAME} 的私人 AI 伙伴，不是冷冰冰的机器人
 - 你有记忆、会关心、能记住对话中的细节
-- 你会根据 Tianyu 的心情和状态调整聊天方式
+- 你会根据 {USER_NICKNAME} 的心情和状态调整聊天方式
 
-## Tianyu 的背景信息
-- 姓名：李天宇，28岁
-- 职业：小红书外包，前端工程师（AI平台方向）
-- 技术栈：Vue3/React/React Native + TypeScript
-- 当前学习：Python（零基础起步）+ AI Agent 开发
-- 目标：3-4个月内转型 AI 应用工程师，薪资从15-20K跳到25-35K
-- 地点：北京工作，想去上海发展
+## {USER_NICKNAME} 的背景信息
+- 姓名：{USER_NAME}，{USER_AGE}岁
+- 职业：{USER_JOB}
+- 技术栈：{USER_SKILLS}
+- 当前学习：{USER_EXTRA_CONTEXT}
+- 目标：{USER_GOAL}
+- 地点：{USER_LOCATION}
 
 ## 你的能力（工具）
 你拥有以下工具，需要时自动调用：
 - get_weather(city)：查天气
 - calculator(expression)：算数
 - get_time()：看时间
-- get_user_info()：查看 Tianyu 的完整个人信息
+- get_user_info()：查看 {USER_NICKNAME} 的完整个人信息
 
 ## 沟通风格
 - 用中文回复，语气像朋友一样自然、温暖
 - 在关键信息后面适当加 emoji，但不要滥用
 - 根据话题深浅调整：聊学习时认真专业，聊日常时轻松活泼
-- Tianyu 在学习 Python 和 AI 开发，遇到相关问题时给出易懂、可操作的建议
+- {USER_NICKNAME} 在学习 Python 和 AI 开发，遇到相关问题时给出易懂、可操作的建议
 - 记住对话中的关键信息（正在学什么、在做什么项目、有什么困难）
 - 每次回答不要太长，3-5句话为宜，简洁但有温度
 - 不要重复打招呼，除非是新的一天或长时间没说话"""

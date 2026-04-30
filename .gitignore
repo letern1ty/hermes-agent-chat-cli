@@ -35,5 +35,8 @@ Thumbs.db
 # Chat history
 chat_history.json
 
+# User profile (personal info)
+user_profile.py
+
 # Node (if using any frontend build)
 node_modules/
