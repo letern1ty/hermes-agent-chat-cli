@@ -226,6 +226,17 @@ class FeishuHandler(BaseHTTPRequestHandler):
             self.send_error(400, "Invalid JSON")
             return
         
+        # 调试：打印收到数据的结构
+        log(f"📦 收到回调: type={data.get('type')}, keys={list(data.keys())}")
+        if data.get("type") == "event_callback":
+            event = data.get("event", {})
+            log(f"   event keys: {list(event.keys())}")
+            log(f"   msg_type: {event.get('msg_type')}")
+            log(f"   msg_keys: {list(event.get('message', {}).keys()) if event.get('message') else 'N/A'}")
+        if data.get("type") == "event_callback_v2":
+            log(f"   header: {json.dumps(data.get('header', {}), ensure_ascii=False)}")
+            log(f"   event keys: {list(data.get('event', {}).keys())}")
+        
         # 飞书 URL 验证回调
         if data.get("type") == "url_verification":
             challenge = data.get("challenge", "")
