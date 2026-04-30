@@ -226,49 +226,40 @@ class FeishuHandler(BaseHTTPRequestHandler):
             self.send_error(400, "Invalid JSON")
             return
         
-        # 调试：打印收到数据的结构
-        log(f"📦 收到回调: type={data.get('type')}, keys={list(data.keys())}")
-        if data.get("type") == "event_callback":
-            event = data.get("event", {})
-            log(f"   event keys: {list(event.keys())}")
-            log(f"   msg_type: {event.get('msg_type')}")
-            log(f"   msg_keys: {list(event.get('message', {}).keys()) if event.get('message') else 'N/A'}")
-        if data.get("type") == "event_callback_v2":
-            log(f"   header: {json.dumps(data.get('header', {}), ensure_ascii=False)}")
-            log(f"   event keys: {list(data.get('event', {}).keys())}")
-        
-        # 飞书 URL 验证回调
+        # ========== 飞书 URL 验证回调 (新版也用 schema/header 格式) ==========
         if data.get("type") == "url_verification":
             challenge = data.get("challenge", "")
             log("🔐 收到飞书 URL 验证")
             self._respond({"challenge": challenge})
             return
         
-        # 消息回调
-        if data.get("type") == "event_callback":
-            event = data.get("event", {})
-            msg_type = event.get("msg_type", "")
+        # 检查是否是事件回调（v2 新格式）
+        header = data.get("header", {})
+        event = data.get("event", {})
+        
+        if header.get("event_type") == "im.message.receive_v1":
+            log(f"📦 收到 v2 事件: {header.get('event_id', '')[:20]}...")
+            msg_type = event.get("message", {}).get("message_type", "")
             
-            # 只处理文本消息
             if msg_type == "text":
-                sender_id = event.get("sender", {}).get("sender_id", {}).get("open_id", "")
-                chat_id = event.get("message", {}).get("chat_id", "")
-                text_content = json.loads(event.get("message", {}).get("content", "{}")).get("text", "")
+                sender = event.get("sender", {})
+                sender_id = sender.get("sender_id", {}).get("open_id", "")
+                message = event.get("message", {})
+                chat_id = message.get("chat_id", "")
+                text_content = json.loads(message.get("content", "{}")).get("text", "")
                 
                 if text_content and sender_id:
-                    # 去掉 @机器人 前缀
                     clean_text = text_content.split("</at>")[-1].strip() if "<at" in text_content else text_content.strip()
-                    
                     log(f"📩 收到飞书消息: {clean_text[:50]}... (from={sender_id[:12]}...)")
                     
-                    # 处理
                     reply = chat_with_agent(sender_id, clean_text)
                     log(f"💬 Agent 回复: {reply[:80]}...")
                     
-                    # 回复
                     send_feishu_message(chat_id, reply)
             else:
                 log(f"⚠️  非文本消息，跳过: msg_type={msg_type}")
+        else:
+            log(f"📦 收到其他回调: header_keys={list(header.keys()) if header else 'N/A'}")
         
         self._respond({"code": 0, "msg": "ok"})
     
