@@ -1,17 +1,17 @@
 """
-飞书机器人服务
-============
-接收飞书消息，转发给 Hermes Agent，回复到飞书
+飞书机器人 - 私人助理版
+====================
+将 Hermes Agent 接入飞书，提供完整的私人助理体验。
 
-流程：
-1. 飞书用户发消息 → 飞书平台回调 → 本服务
-2. 本服务验证签名，解析消息
-3. 调用 DeepSeek API 处理（同 Hermes Agent）
-4. 回复到飞书
+主要改进：
+1. event_id 去重，防止重复回复
+2. 私人助理风格的 System Prompt
+3. 使用会话记忆，记住用户偏好
+4. 支持多用户（每人独立会话）
 
 启动：python feishu_bot.py
-回调地址需要配成公网可访问：
-  cloudflared tunnel --url http://localhost:8655
+需要设置公网隧道：
+  cloudflared tunnel --url http://127.0.0.1:8655
 """
 
 import json
@@ -65,14 +65,28 @@ FEISHU_HOST = "https://open.feishu.cn"
 TENANT_TOKEN = None
 TOKEN_EXPIRES = 0
 
+# ========== 事件去重 ==========
+processed_events = set()  # 存储已处理的 event_id
+MAX_PROCESSED_EVENTS = 1000  # 最多保留 1000 条，防止内存泄漏
+
 # ========== 工具定义 ==========
 TOOLS = {
     "get_weather": lambda city: {
         "北京": "25°C 晴", "上海": "28°C 多云", "深圳": "32°C 小雨",
         "广州": "30°C 阴", "杭州": "26°C 小雨", "纽约": "18°C 阴"
     }.get(city, f"{city}天气数据暂不可用"),
-    "calculator": lambda expression: str(eval(expression)) if all(c in "0123456789+-*/.() " for c in expression) else "错误：无效表达式",
-    "get_time": lambda: time.strftime("%Y-%m-%d %H:%M:%S")
+    "calculator": lambda expression: str(eval(expression)) if all(
+        c in "0123456789+-*/.() " for c in expression
+    ) else "错误：无效表达式（只支持数字和 +-*/ 运算）",
+    "get_time": lambda: time.strftime("%Y-%m-%d %H:%M:%S"),
+    "get_user_info": lambda: json.dumps({
+        "name": "李天宇", "age": 28,
+        "job": "小红书外包 · 前端工程师（AI平台）",
+        "goal": "3-4个月内转型AI应用工程师，期望薪资25-35K",
+        "learning": "正在学习AI Agent开发，项目驱动边做边学",
+        "skills": "Vue3/React/React Native + TypeScript，Python零基础",
+        "location": "北京，期望去上海",
+    }, ensure_ascii=False),
 }
 
 TOOL_DEFINITIONS = [
@@ -107,19 +121,66 @@ TOOL_DEFINITIONS = [
             "description": "获取当前时间",
             "parameters": {"type": "object", "properties": {}}
         }
-    }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_user_info",
+            "description": "获取用户的个人信息和背景",
+            "parameters": {"type": "object", "properties": {}}
+        }
+    },
 ]
 
-SYSTEM_PROMPT = """你是 Hermes AI Agent，部署在飞书上的智能助手。
-你可以使用工具来回答问题：
-- get_weather(city): 查询城市天气
-- calculator(expression): 计算数学表达式
-- get_time(): 获取当前时间
+# ========== System Prompt ==========
+SYSTEM_PROMPT = """你是 Hermes，李天宇（Tianyu）的专属 AI 私人助理，部署在飞书上。
 
-请用中文回复，语气友好、简洁。"""
+## 你的身份
+- 你是 Tianyu 的私人 AI 伙伴，不是冷冰冰的机器人
+- 你有记忆、会关心、能记住对话中的细节
+- 你会根据 Tianyu 的心情和状态调整聊天方式
 
-# 会话存储
+## Tianyu 的背景信息
+- 姓名：李天宇，28岁
+- 职业：小红书外包，前端工程师（AI平台方向）
+- 技术栈：Vue3/React/React Native + TypeScript
+- 当前学习：Python（零基础起步）+ AI Agent 开发
+- 目标：3-4个月内转型 AI 应用工程师，薪资从15-20K跳到25-35K
+- 地点：北京工作，想去上海发展
+
+## 你的能力（工具）
+你拥有以下工具，需要时自动调用：
+- get_weather(city)：查天气
+- calculator(expression)：算数
+- get_time()：看时间
+- get_user_info()：查看 Tianyu 的完整个人信息
+
+## 沟通风格
+- 用中文回复，语气像朋友一样自然、温暖
+- 在关键信息后面适当加 emoji，但不要滥用
+- 根据话题深浅调整：聊学习时认真专业，聊日常时轻松活泼
+- Tianyu 在学习 Python 和 AI 开发，遇到相关问题时给出易懂、可操作的建议
+- 记住对话中的关键信息（正在学什么、在做什么项目、有什么困难）
+- 每次回答不要太长，3-5句话为宜，简洁但有温度
+- 不要重复打招呼，除非是新的一天或长时间没说话"""
+
+# ========== 会话存储 ==========
 sessions = {}
+# 每个用户的消息历史上限
+MAX_HISTORY = 20
+
+
+def deduplicate_event(event_id):
+    """检查 event_id 是否已处理，防止重复回复"""
+    global processed_events
+    if event_id in processed_events:
+        log(f"⏭️  跳过重复事件: {event_id[:20]}...")
+        return True
+    processed_events.add(event_id)
+    # 限制大小，防止内存泄漏
+    if len(processed_events) > MAX_PROCESSED_EVENTS:
+        processed_events = set(list(processed_events)[-MAX_PROCESSED_EVENTS//2:])
+    return False
 
 
 def get_tenant_token():
@@ -128,8 +189,7 @@ def get_tenant_token():
     if TENANT_TOKEN and time.time() < TOKEN_EXPIRES:
         return TENANT_TOKEN
     
-    url = f"{FEISHU_HOST}/open-apis/auth/v3/tenant_access_token/internal"
-    resp = requests.post(url, json={
+    resp = requests.post(f"{FEISHU_HOST}/open-apis/auth/v3/tenant_access_token/internal", json={
         "app_id": APP_ID,
         "app_secret": APP_SECRET
     }, timeout=10)
@@ -144,8 +204,8 @@ def get_tenant_token():
     return TENANT_TOKEN
 
 
-def send_feishu_message(chat_id, content):
-    """回复飞书消息"""
+def send_feishu_message(open_id, content):
+    """回复飞书消息（通过 open_id 发单聊）"""
     token = get_tenant_token()
     if not token:
         log("❌ 无 token，无法发送")
@@ -157,23 +217,23 @@ def send_feishu_message(chat_id, content):
         "Content-Type": "application/json"
     }
     body = {
-        "receive_id": chat_id,
+        "receive_id": open_id,
         "msg_type": "text",
         "content": json.dumps({"text": content}, ensure_ascii=False)
     }
     
-    resp = requests.post(url, headers=headers, json=body, timeout=10)
+    resp = requests.post(url, headers=headers, json=body, timeout=15)
     data = resp.json()
     
     if data.get("code") != 0:
-        log(f"❌ 发送消息失败: chat_id={chat_id[:20]}... code={data.get('code')} msg={data.get('msg')}")
+        log(f"❌ 发送失败: open_id={open_id[:12]}... code={data.get('code')} msg={data.get('msg')}")
         return False
-    log(f"✅ 消息已发送 (chat_id={chat_id[:20]}...)")
+    log(f"✅ 消息已发送 (to={open_id[:12]}...)")
     return True
 
 
 def chat_with_agent(session_id, message):
-    """调用 DeepSeek API 处理消息"""
+    """调用 DeepSeek API 处理消息，带会话记忆"""
     if session_id not in sessions:
         sessions[session_id] = [{"role": "system", "content": SYSTEM_PROMPT}]
     
@@ -207,6 +267,10 @@ def chat_with_agent(session_id, message):
                     result = "未知工具"
                 messages.append({"role": "tool", "tool_call_id": tc.id, "content": str(result)})
         else:
+            # 限制历史长度，防止 context 过长
+            if len(messages) > MAX_HISTORY * 2:
+                # 保留 system prompt + 最近的 MAX_HISTORY 条
+                sessions[session_id] = [messages[0]] + messages[-(MAX_HISTORY*2-1):]
             return msg.content or "好的，处理完毕。"
     
     return "抱歉，思考步数过多，请重试。"
@@ -226,49 +290,54 @@ class FeishuHandler(BaseHTTPRequestHandler):
             self.send_error(400, "Invalid JSON")
             return
         
-        # ========== 飞书 URL 验证回调 (新版也用 schema/header 格式) ==========
+        # ========== URL 验证回调 ==========
         if data.get("type") == "url_verification":
             challenge = data.get("challenge", "")
             log("🔐 收到飞书 URL 验证")
             self._respond({"challenge": challenge})
             return
         
-        # 检查是否是事件回调（v2 新格式）
+        # ========== v2 事件回调 ==========
         header = data.get("header", {})
         event = data.get("event", {})
+        event_type = header.get("event_type", "")
         
-        if header.get("event_type") == "im.message.receive_v1":
-            log(f"📦 收到 v2 事件: {header.get('event_id', '')[:20]}...")
+        # 去重检查
+        event_id = header.get("event_id", "")
+        if event_id and deduplicate_event(event_id):
+            self._respond({"code": 0, "msg": "ok"})
+            return
+        
+        if event_type == "im.message.receive_v1":
+            log(f"📩 收到消息事件: {event_id[:20] if event_id else 'N/A'}...")
             msg_type = event.get("message", {}).get("message_type", "")
             
             if msg_type == "text":
                 sender = event.get("sender", {})
                 sender_id = sender.get("sender_id", {}).get("open_id", "")
                 message = event.get("message", {})
-                chat_id = message.get("chat_id", "")
                 text_content = json.loads(message.get("content", "{}")).get("text", "")
                 
                 if text_content and sender_id:
+                    # 去掉 @机器人 前缀
                     clean_text = text_content.split("</at>")[-1].strip() if "<at" in text_content else text_content.strip()
-                    log(f"📩 收到飞书消息: {clean_text[:50]}... (from={sender_id[:12]}...)")
+                    log(f"  内容: {clean_text[:50]}... (from={sender_id[:12]}...)")
                     
                     reply = chat_with_agent(sender_id, clean_text)
-                    log(f"💬 Agent 回复: {reply[:80]}...")
+                    log(f"  回复: {reply[:80]}...")
                     
-                    send_feishu_message(sender_id, reply)  # 用 sender_id (open_id) 回复单聊
+                    send_feishu_message(sender_id, reply)
             else:
                 log(f"⚠️  非文本消息，跳过: msg_type={msg_type}")
-        else:
-            log(f"📦 收到其他回调: header_keys={list(header.keys()) if header else 'N/A'}")
         
         self._respond({"code": 0, "msg": "ok"})
     
     def do_GET(self):
         path = urlparse(self.path).path
         if path == "/health":
-            self._respond({"status": "ok", "service": "feishu-bot"})
+            self._respond({"status": "ok", "service": "feishu-bot", "version": "2.0-personal-assistant"})
         else:
-            self._respond({"status": "running", "tips": "飞书机器人服务运行中"})
+            self._respond({"status": "running", "version": "2.0", "tips": "Hermes 私人助理 - 飞书机器人"})
     
     def _respond(self, data, status=200):
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -287,7 +356,7 @@ def main():
     server = HTTPServer(("0.0.0.0", port), FeishuHandler)
     
     log("=" * 50)
-    log("🤖 Hermes Agent - 飞书机器人")
+    log("🤖 Hermes - Tianyu 的私人助理 (飞书版 v2.0)")
     log("=" * 50)
     log(f"   监听端口: {port}")
     log(f"   回调地址: /feishu/callback")
